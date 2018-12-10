@@ -14,27 +14,27 @@ typedef struct queue {
   struct green_t *tail;
 } queue;
 
-queue readyQueue;
+queue readyqueue = {NULL, NULL};
 
 int flag = 0;
 green_cond_t cond;
 
-void enqueue(green_t *thread) {
-  if (readyQueue.head == NULL && readyQueue.tail == NULL) {
-    readyQueue.head = thread;
-    readyQueue.tail = thread;
+void enqueue(queue *queue, green_t *thread) {
+  if (queue->head == NULL && queue->tail == NULL) {
+    queue->head = thread;
+    queue->tail = thread;
   } else {
-    readyQueue.tail->next = thread;
-    readyQueue.tail = thread;
+    queue->tail->next = thread;
+    queue->tail = thread;
   }
 }
 
-green_t *dequeue() {
+green_t *dequeue(queue *queue) {
   green_t *thread;
 
-  thread = readyQueue.head;
-  readyQueue.head = readyQueue.head->next;
-  /*if (readyQueue.head->next == NULL) {
+  thread = queue->head;
+  queue->head = queue->head->next;
+  /*if (queue.head->next == NULL) {
     readyQueue.tail == NULL;
   }*/
   thread->next = NULL;
@@ -60,7 +60,7 @@ void green_thread() {
 
   // place waiting (joining) thread in ready queue
   if (this->join) {
-    enqueue(this->join);
+    enqueue(&readyqueue, this->join);
   }
 
   // free alocated memory structures
@@ -71,7 +71,7 @@ void green_thread() {
   this->zombie = TRUE;
 
   // find the next thread to run
-  green_t *next = dequeue();
+  green_t *next = dequeue(&readyqueue);
 
   running = next;
   setcontext(next->context);
@@ -96,7 +96,7 @@ int green_create(green_t *new, void *(*fun)(void*), void *arg) {
   new->zombie = FALSE;
 
   // add new to the ready queue
-  enqueue(new);
+  enqueue(&readyqueue, new);
 
   return 0;
 }
@@ -104,10 +104,10 @@ int green_create(green_t *new, void *(*fun)(void*), void *arg) {
 int green_yield() {
   green_t * susp = running;
   // add susp to ready queue
-  enqueue(susp);
+  enqueue(&readyqueue, susp);
 
   // select the next thread for execution
-  green_t *next = dequeue();
+  green_t *next = dequeue(&readyqueue);
 
   running = next;
   swapcontext(susp->context, next->context);
@@ -129,7 +129,7 @@ int green_join(green_t *thread) {
   thread->join = susp;
 
   //select the next thread for execution
-  green_t *next = dequeue();
+  green_t *next = dequeue(&readyqueue);
 
   running = next;
   swapcontext(susp->context, next->context);
@@ -137,19 +137,25 @@ int green_join(green_t *thread) {
 }
 
 void green_cond_init(green_cond_t *cond) {
-  cond->susp_threads->head = NULL;
-  cond->susp_threads->tail = NULL;
+  cond->head = NULL;
+  cond->tail = NULL;
 }
 
 
 void green_cond_wait(green_cond_t *cond){
+  green_t *self = running;
 
+
+  self->next = cond->head;
+  cond->head = running;
 
 }
 
 
 void green_cond_signal(green_cond_t *cond){
-
+  while (cond->head != NULL) {
+    cond->head = cond->head->next;
+  }
 
 }
 

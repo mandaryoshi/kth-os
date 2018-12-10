@@ -11,7 +11,8 @@ typedef struct green_t {
 } green_t;
 
 typedef struct green_cond_t {
-  struct queue *susp_threads;
+  struct green_t *head;
+  struct green_t *tail;
 } green_cond_t;
 
 int green_create(green_t *thread, void *(*fun)(void*), void *arg);
