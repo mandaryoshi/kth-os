@@ -16,6 +16,9 @@ typedef struct queue {
 
 queue readyQueue;
 
+int flag = 0;
+green_cond_t cond;
+
 void enqueue(green_t *thread) {
   if (readyQueue.head == NULL && readyQueue.tail == NULL) {
     readyQueue.head = thread;
@@ -34,6 +37,7 @@ green_t *dequeue() {
   /*if (readyQueue.head->next == NULL) {
     readyQueue.tail == NULL;
   }*/
+  thread->next = NULL;
 
   return thread;
 }
@@ -130,6 +134,23 @@ int green_join(green_t *thread) {
   running = next;
   swapcontext(susp->context, next->context);
   return 0;
+}
+
+void green_cond_init(green_cond_t *cond) {
+  cond->susp_threads->head = NULL;
+  cond->susp_threads->tail = NULL;
+}
+
+
+void green_cond_wait(green_cond_t *cond){
+
+
+}
+
+
+void green_cond_signal(green_cond_t *cond){
+
+
 }
 
 void *test(void *arg) {
