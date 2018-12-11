@@ -4,10 +4,19 @@
 #include <assert.h>
 #include "green.h"
 
+#include <signal.h>
+#include <sys/time.h>
+
+#define PERIOD 100
+
 #define FALSE 0
 #define TRUE 1
 
 #define STACK_SIZE 4096
+
+static sigset_t block;
+
+void timer_handler(int);
 
 typedef struct queue {
   struct green_t *head;
@@ -52,7 +61,39 @@ static void init() __attribute__((constructor));
 void init() {
   readyqueue = malloc(sizeof(queue));
 
+  sigemptyset(&block);
+  sigaddset(&block, SIGVTALRM);
+
+  struct sigaction act = {0};
+  struct timeval interval;
+  struct itimerval period;
+
+  act.sa_handler = timer_handler;
+  assert(sigaction(SIGVTALRM, &act, NULL) == 0);
+
+  interval.tv_sec = 0;
+  interval.tv_usec = PERIOD;
+  period.it_interval = interval;
+  period.it_value = interval;
+  setitimer(ITIMER_VIRTUAL, &period, NULL);
+
   getcontext(&main_cntx);
+}
+
+//-----BLOCK - sigprocmask(SIG_BLOCK, &block, NULL);
+//-----UNBLOCK - sigprocmask(SIG_UNBLOCK, &block, NULL);
+
+void timer_handler(int sig) {
+  green_t *susp = running;
+
+  //add the running to the ready queue
+  enqueue(readyqueue, susp);
+
+  //find the next thread for execution
+  green_t *next = dequeue(readyqueue);
+
+  running = next;
+  swapcontext(susp->context, next->context);
 }
 
 void green_thread() {
@@ -61,9 +102,11 @@ void green_thread() {
   (*this->fun)(this->arg);
 
   // place waiting (joining) thread in ready queue
+  sigprocmask(SIG_BLOCK, &block, NULL);
   if (this->join) {
     enqueue(readyqueue, this->join);
   }
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
 
   // free alocated memory structures
   free(this->context->uc_stack.ss_sp);
@@ -73,10 +116,12 @@ void green_thread() {
   this->zombie = TRUE;
 
   // find the next thread to run
+  sigprocmask(SIG_BLOCK, &block, NULL);
   green_t *next = dequeue(readyqueue);
 
   running = next;
   setcontext(next->context);
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
 }
 
 int green_create(green_t *new, void *(*fun)(void*), void *arg) {
@@ -98,12 +143,15 @@ int green_create(green_t *new, void *(*fun)(void*), void *arg) {
   new->zombie = FALSE;
 
   // add new to the ready queue
+  sigprocmask(SIG_BLOCK, &block, NULL);
   enqueue(readyqueue, new);
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
 
   return 0;
 }
 
 int green_yield() {
+  sigprocmask(SIG_BLOCK, &block, NULL);
   green_t * susp = running;
   // add susp to ready queue
   enqueue(readyqueue, susp);
@@ -113,6 +161,7 @@ int green_yield() {
 
   running = next;
   swapcontext(susp->context, next->context);
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
   return 0;
 }
 
@@ -120,6 +169,8 @@ int green_join(green_t *thread) {
 
   if(thread->zombie)
     return 0;
+
+  sigprocmask(SIG_BLOCK, &block, NULL);
 
   green_t *susp = running;
   // add to waiting threads
@@ -135,6 +186,7 @@ int green_join(green_t *thread) {
 
   running = next;
   swapcontext(susp->context, next->context);
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
   return 0;
 }
 
@@ -147,13 +199,17 @@ void green_cond_init(green_cond_t *cond) {
 
 
 void green_cond_wait(green_cond_t *cond){
+  sigprocmask(SIG_BLOCK, &block, NULL);
+
   green_t *susp = running;
   //printf("hi\n");
+
   enqueue(cond->queue, susp);
 
 
   running = dequeue(readyqueue);
   swapcontext(susp->context, running->context);
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
 
   /*self->next = cond->head;
   cond->head = running;*/
@@ -168,9 +224,10 @@ void green_cond_signal(green_cond_t *cond){
   if (cond->queue->head == NULL) {
     return;
   }
-
+  sigprocmask(SIG_BLOCK, &block, NULL);
   green_t *thread = dequeue(cond->queue);
   enqueue(readyqueue, thread);
+  sigprocmask(SIG_UNBLOCK, &block, NULL);
 
 
 }
