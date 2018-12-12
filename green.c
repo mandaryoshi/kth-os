@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <ucontext.h>
 #include <stdio.h>
+#include <pthread.h>
 #include <assert.h>
 #include "green.h"
 
@@ -29,6 +30,9 @@ int flag = 0;
 green_cond_t condition;
 
 green_mutex_t mutex;
+
+pthread_mutex_t pthreadmutex;
+pthread_cond_t pthreadcond;
 
 static void enqueue(queue *queue, green_t *thread) {
   if (queue->head == NULL || queue->tail == NULL) {
@@ -376,7 +380,7 @@ int green_mutex_unlock(green_mutex_t *mutex) {
 
 void *test(void *arg) {         //test 4 for final touch
   int i = *(int*)arg;
-  int loop = 40;
+  int loop = 10000;
   green_mutex_lock(&mutex);
   while(loop > 0 ) {
     if (flag == i) {
@@ -391,10 +395,29 @@ void *test(void *arg) {         //test 4 for final touch
   }
 }
 
+/*void *test(void *arg) {         //test 5 for pthread cond
+  int i = *(int*)arg;
+  int loop = 100000;
+  pthread_mutex_lock(&pthreadmutex);
+  while(loop > 0 ) {
+    if (flag == i) {
+      printf("thread %d: %d\n", i, loop);
+      loop--;
+      flag = (i + 1) % 2;
+      pthread_cond_signal(&pthreadcond);
+      pthread_mutex_unlock(&pthreadmutex);
+    } else {
+      pthread_cond_wait(&pthreadcond, &pthreadmutex);
+    }
+  }
+}*/
+
 
 
 int main() {
-  green_t g0, g1;
+
+  clock_t start = clock();
+  green_t g0, g1;       //main for tests 1 to 4
   int a0 = 0;
   int a1 = 1;
 
@@ -405,6 +428,30 @@ int main() {
 
   green_join(&g0);
   green_join(&g1);
-  printf("done\n");
+
+  clock_t end = clock();
+  long int time_spent = (long int) (end - start);
+  printf("took %lds\n", time_spent);
   return 0;
+
+  /*clock_t start = clock();        //main for test 5
+  pthread_t p0, p1;
+  int a0 = 0;
+  int a1 = 1;
+
+  pthread_mutex_init(&pthreadmutex, NULL);
+  pthread_cond_init(&pthreadcond, NULL);
+
+  pthread_create(&p0, NULL, test, &a0);
+  pthread_create(&p1, NULL, test, &a1);
+
+  pthread_join(p0, NULL);
+  pthread_join(p1, NULL);
+
+  clock_t end = clock();
+
+  long int time_spent = (long int) (end - start);
+  printf("took %lds\n", time_spent);
+  return 0;*/
+
 }
