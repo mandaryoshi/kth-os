@@ -380,7 +380,7 @@ int green_mutex_unlock(green_mutex_t *mutex) {
 
 void *test(void *arg) {         //test 4 for final touch
   int i = *(int*)arg;
-  int loop = 10000;
+  int loop = 100;
   green_mutex_lock(&mutex);
   while(loop > 0 ) {
     if (flag == i) {
