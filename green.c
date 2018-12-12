@@ -188,7 +188,6 @@ int green_join(green_t *thread) {
   /*while (thread->join) {
     thread = thread->join;
   }*/
-
   thread->join = susp;
 
   //select the next thread for execution
@@ -208,7 +207,7 @@ void green_cond_init(green_cond_t *cond) {
 }
 
 
-void green_cond_wait(green_cond_t *cond){
+/*void green_cond_wait(green_cond_t *cond){
   blocksignal();
 
   green_t *susp = running;
@@ -221,9 +220,52 @@ void green_cond_wait(green_cond_t *cond){
   swapcontext(susp->context, running->context);
   unblocksignal();
 
-  /*self->next = cond->head;
-  cond->head = running;*/
+}*/
 
+int green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
+  // block timer interrupt
+  blocksignal();
+
+  // suspend the running thread on condition
+  green_t *susp = running;
+  enqueue(cond->queue, susp);
+
+
+  if(mutex != NULL) {
+    // release the lock if we have a mutex
+    mutex->taken = FALSE;
+
+    // schedule suspended threads
+    green_t *thread = mutex->susp;
+    enqueue(readyqueue, thread);
+
+  }
+  // schedule the next thread
+  green_t *next = dequeue(readyqueue);
+
+  running = next;
+  swapcontext(susp->context, next->context);
+
+  if(mutex != NULL) {
+    // try to take the lock
+    while(mutex->taken) {
+      // bad luck, suspend
+      mutex->susp = susp;
+
+      // find the next thread
+      green_t *next = dequeue(readyqueue);
+
+      running = next;
+      swapcontext(susp->context, next->context);
+
+    }
+    // take the lock
+    mutex->taken = TRUE;
+  }
+  // unblock
+  unblocksignal();
+
+  return 0;
 }
 
 
@@ -274,8 +316,10 @@ int green_mutex_unlock(green_mutex_t *mutex) {
   blocksignal();
 
   // move suspended threads to ready queue
-  green_t *thread = mutex->susp;
-  enqueue(readyqueue, thread);
+  if (mutex->susp) {
+    green_t *thread = mutex->susp;
+    enqueue(readyqueue, thread);
+  }
 
   // release lock
   mutex->taken = FALSE;
@@ -286,7 +330,7 @@ int green_mutex_unlock(green_mutex_t *mutex) {
   return 0;
 }
 
-/*void *test(void *arg) {
+/*void *test(void *arg) {       //test 1 for green threads
   int i = *(int*)arg;
   int loop = 40000;
   while(loop > 0 ) {
@@ -296,7 +340,7 @@ int green_mutex_unlock(green_mutex_t *mutex) {
   }
 }*/
 
-/*void *test(void *arg) {
+/*void *test(void *arg) {     //test 2 for cond variables
   int i = *(int*)arg;
   int loop = 40000;
   while(loop > 0 ) {
@@ -311,9 +355,28 @@ int green_mutex_unlock(green_mutex_t *mutex) {
   }
 }*/
 
-void *test(void *arg) {
+/*void *test(void *arg) {         //test 3 for mutex
   int i = *(int*)arg;
-  int loop = 40000;
+  int loop = 40;
+  green_mutex_lock(&mutex);
+  while(loop > 0 ) {
+    if (flag == i) {
+      printf("thread %d: %d\n", i, loop);
+
+      loop--;
+      flag = (i + 1) % 2;
+      green_cond_signal(&condition);
+      green_mutex_unlock(&mutex);
+    } else {
+      //green_mutex_unlock(&mutex);
+      green_cond_wait(&condition);
+    }
+  }
+}*/
+
+void *test(void *arg) {         //test 4 for final touch
+  int i = *(int*)arg;
+  int loop = 40;
   green_mutex_lock(&mutex);
   while(loop > 0 ) {
     if (flag == i) {
@@ -323,7 +386,7 @@ void *test(void *arg) {
       green_cond_signal(&condition);
       green_mutex_unlock(&mutex);
     } else {
-      green_cond_wait(&condition);
+      green_cond_wait(&condition, &mutex);
     }
   }
 }
@@ -334,8 +397,9 @@ int main() {
   green_t g0, g1;
   int a0 = 0;
   int a1 = 1;
-  green_mutex_init(&mutex);
+
   green_cond_init(&condition);
+  green_mutex_init(&mutex);
   green_create(&g0, test, &a0);
   green_create(&g1, test, &a1);
 
