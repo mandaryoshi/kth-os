@@ -336,7 +336,7 @@ int green_mutex_unlock(green_mutex_t *mutex) {
 
 /*void *test(void *arg) {       //test 1 for green threads
   int i = *(int*)arg;
-  int loop = 40000;
+  int loop = 4;
   while(loop > 0 ) {
     printf("thread %d: %d\n", i, loop);
     loop--;
@@ -346,12 +346,12 @@ int green_mutex_unlock(green_mutex_t *mutex) {
 
 /*void *test(void *arg) {     //test 2 for cond variables
   int i = *(int*)arg;
-  int loop = 40000;
+  int loop = 1000;
   while(loop > 0 ) {
     if (flag == i) {
       printf("thread %d: %d\n", i, loop);
       loop--;
-      flag = (i + 1) % 2;
+      flag = (i + 1) % 3;
       green_cond_signal(&condition);
     } else {
       green_cond_wait(&condition);
@@ -366,13 +366,12 @@ int green_mutex_unlock(green_mutex_t *mutex) {
   while(loop > 0 ) {
     if (flag == i) {
       printf("thread %d: %d\n", i, loop);
-
       loop--;
-      flag = (i + 1) % 2;
+      flag = (i + 1) % 3;
       green_cond_signal(&condition);
       green_mutex_unlock(&mutex);
     } else {
-      //green_mutex_unlock(&mutex);
+      green_mutex_unlock(&mutex);
       green_cond_wait(&condition);
     }
   }
@@ -380,11 +379,11 @@ int green_mutex_unlock(green_mutex_t *mutex) {
 
 void *test(void *arg) {         //test 4 for final touch
   int i = *(int*)arg;
-  int loop = 100;
+  int loop = 10000;
   green_mutex_lock(&mutex);
   while(loop > 0 ) {
     if (flag == i) {
-      printf("thread %d: %d\n", i, loop);
+      //printf("thread %d: %d\n", i, loop);
       loop--;
       flag = (i + 1) % 2;
       green_cond_signal(&condition);
@@ -397,11 +396,11 @@ void *test(void *arg) {         //test 4 for final touch
 
 /*void *test(void *arg) {         //test 5 for pthread cond
   int i = *(int*)arg;
-  int loop = 100000;
+  int loop = 10000;
   pthread_mutex_lock(&pthreadmutex);
   while(loop > 0 ) {
     if (flag == i) {
-      printf("thread %d: %d\n", i, loop);
+      //printf("thread %d: %d\n", i, loop);
       loop--;
       flag = (i + 1) % 2;
       pthread_cond_signal(&pthreadcond);
@@ -431,7 +430,7 @@ int main() {
 
   clock_t end = clock();
   long int time_spent = (long int) (end - start);
-  printf("took %lds\n", time_spent);
+  printf("took %ld clock cycles\n", time_spent);
   return 0;
 
   /*clock_t start = clock();        //main for test 5
@@ -451,7 +450,7 @@ int main() {
   clock_t end = clock();
 
   long int time_spent = (long int) (end - start);
-  printf("took %lds\n", time_spent);
+  printf("took %ld clock cycles\n", time_spent);
   return 0;*/
 
 }
